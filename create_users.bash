@@ -1,5 +1,29 @@
 #!/bin/bash
 
+# Set the project being set up
+set_project() {
+    gcloud projects list | grep $1
+    if [[ $? == 1 ]]
+    then
+        echo "Invalid project $1"
+        exit 1
+    fi
+
+    gcloud config set project $1 &> /dev/null
+}
+
+OLD_PROJECT=`gcloud config list project 2> /dev/null | grep "project = " | cut -d ' ' -f 3`
+PROJECT=$OLD_PROJECT
+
+echo "Project Name (leave blank to use default project $OLD_PROJECT)"
+read project
+
+if [[ $project != "" ]]
+then
+    PROJECT=$project
+    set_project $PROJECT
+fi
+
 MASTER=`grep "master" workers`
 MASTERID=`echo $MASTER | cut -d ' ' -f 2`
 MASTERIDIP=`echo $MASTER | cut -d ' ' -f 1-2,4`
@@ -65,7 +89,7 @@ do
     if [[ $RET2 == 1 ]]
     then
         echo "Adding new SSH key"
-        
+
         gcloud compute ssh $MASTERID $MZONE --command \
         "echo | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
          echo \"# $USERNAME\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
@@ -73,3 +97,8 @@ do
     fi
     echo
 done
+
+if [[ $PROJECT != $OLD_PROJECT ]]
+then
+    set_project $OLD_PROJECT
+fi
