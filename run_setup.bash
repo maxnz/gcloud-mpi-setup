@@ -3,7 +3,7 @@
 USED_ZONES=''
 OLD_PROJECT=`gcloud config list project 2> /dev/null | grep "project = " | cut -d ' ' -f 3`
 PROJECT=$OLD_PROJECT
-PREFIX="mpi1-"
+PREFIX="mpi-"
 SAVEIMAGE=0
 
 
