@@ -3,9 +3,8 @@
 USED_ZONES=''
 OLD_PROJECT=`gcloud config list project 2> /dev/null | grep "project = " | cut -d ' ' -f 3`
 PROJECT=$OLD_PROJECT
-PREFIX="mpi-"
-# SAVEIMAGE=true
-SAVEIMAGE=false
+PREFIX="mpi1-"
+SAVEIMAGE=0
 
 
 # Set the project being set up
@@ -32,15 +31,14 @@ ask_project() {
     fi
 }
 
-ask_del_image() {
+# Ask if user wants to save the mpi-image
+ask_save_img() {
     echo "Save image after setup? (Saving image will incur costs)"
     read saveimg
     saveimg=`echo $saveimg | head -c1`
-    echo $saveimg
     if [[ $saveimg == 'y' || $saveimg == 'Y' ]]
     then 
-        echo $saveimg
-        SAVEIMAGE=true
+        SAVEIMAGE=1
     fi
 }
 
@@ -142,12 +140,11 @@ create_instances() {
         fi
     done
 
-    if [ $SAVEIMAGE ]; then echo "SAVE"; fi;
+    if [[ $SAVEIMAGE == 0 ]]
+    then 
+        gcloud compute images delete mpi-image --quiet
+    fi
 
-    # if [ $SAVEIMAGE ]
-    # then
-        # gcloud compute images delete mpi-image --quiet
-    # fi
 }
 
 # Create the workers file
@@ -226,18 +223,18 @@ config_worker() {
      ssh $WORKERID -t \"exit\"" &> /dev/null
 }
 
-
+# Populate /etc/skel
 setup_skel() {
-    echo "Set up /etc/skel for new users"
+    echo "Setting up /etc/skel for new users"
     gcloud compute scp mpihosts $MASTERID: $MZONE &> /dev/null
     gcloud compute ssh $MASTERID $MZONE --command \
-    "cd /etc/skel && \
-     sudo wget http://csinparallel.cs.stolaf.edu/CSinParallel.tar.gz && \
-     sudo tar -xf CSinParallel.tar.gz && sudo rm CSinParallel.tar.gz && \
-     sudo cp ~/mpihosts /etc/skel && \
-     sudo cp -r ~/.ssh . && \
-     echo | sudo tee .ssh/authorized_keys &> /dev/null && \
-     echo \"# Master\" | sudo tee -a .ssh/authorized_keys &> /dev/null && \
+    "cd /etc/skel; \
+     sudo wget http://csinparallel.cs.stolaf.edu/CSinParallel.tar.gz; \
+     sudo tar -xf CSinParallel.tar.gz && sudo rm CSinParallel.tar.gz; \
+     sudo cp ~/mpihosts /etc/skel; \
+     sudo cp -r ~/.ssh .; \
+     echo | sudo tee .ssh/authorized_keys &> /dev/null; \
+     echo \"# Master\" | sudo tee -a .ssh/authorized_keys &> /dev/null; \
      cat ~/.ssh/id_rsa.pub | sudo tee -a .ssh/authorized_keys &> /dev/null"
 }
 
@@ -251,7 +248,7 @@ if ! [[ $NUMVM =~ $re ]] ; then
 fi
 
 ask_project
-ask_del_image
+ask_save_img
 
 create_image
 create_instances
@@ -259,6 +256,7 @@ create_workers_txt
 
 gcloud compute config-ssh &> /dev/null
 
+echo "Configuring VMs"
 config_master_vars
 config_master
 
@@ -267,3 +265,8 @@ for ((i=1;i<NUMVM;i++)); do
 done
 
 setup_skel
+
+if [[ $PROJECT != $OLD_PROJECT ]]
+then
+    set_project $OLD_PROJECT
+fi
