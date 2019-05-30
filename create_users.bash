@@ -30,9 +30,6 @@ MASTERIDIP=`echo $MASTER | cut -d ' ' -f 1-2,4`
 MZONE=`echo $MASTER | cut -d ' ' -f 3`
 MZONE="--zone $MZONE"
 
-echo -n Master Node IP:
-gcloud compute instances list | sed 's/  \+/ /g' | grep $MASTERID | cut -d ' ' -f 5
-
 while true 
 do
     echo "Enter new username (leave blank to quit)"
@@ -98,6 +95,9 @@ do
     fi
     echo
 done
+
+echo -n "Master Node IP: "
+gcloud compute instances list | sed 's/  \+/ /g' | grep $MASTERID | cut -d ' ' -f 5
 
 if [[ $PROJECT != $OLD_PROJECT ]]
 then
