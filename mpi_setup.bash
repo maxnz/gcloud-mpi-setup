@@ -10,5 +10,11 @@ tar -xzf mpich-$MPIVERSION.tar.gz
 
 cd mpich-$MPIVERSION && ./configure && make && make install
 cd
+ls
+pwd
 rm -r mpich-$MPIVERSION
 rm mpich-$MPIVERSION.tar.gz
+
+echo 
+echo 
+echo

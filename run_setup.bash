@@ -4,8 +4,8 @@ USED_ZONES=''
 OLD_PROJECT=`gcloud config list project 2> /dev/null | grep "project = " | cut -d ' ' -f 3`
 PROJECT=$OLD_PROJECT
 PREFIX="mpi-"
-# DELIMAGE=true
-DELIMAGE=false
+# SAVEIMAGE=true
+SAVEIMAGE=false
 
 
 # Set the project being set up
@@ -34,12 +34,13 @@ ask_project() {
 
 ask_del_image() {
     echo "Save image after setup? (Saving image will incur costs)"
-    read delimage
-    delimage=`echo $delimage | head -c1`
-    echo $delimage
-    if [[ $delimage == 'y' || $delimage == 'Y' ]]
+    read saveimg
+    saveimg=`echo $saveimg | head -c1`
+    echo $saveimg
+    if [[ $saveimg == 'y' || $saveimg == 'Y' ]]
     then 
-        DELIMAGE=false
+        echo $saveimg
+        SAVEIMAGE=true
     fi
 }
 
@@ -49,7 +50,10 @@ get_rand_zone() {
     numzones=`wc zones.txt -l | cut -d ' ' -f 1`
     let "z %= $numzones"
     ZONE=`sed "${z}q;d" zones.txt`
-    echo $USED_ZONES | grep $ZONE &> /dev/null
+    zonec=`echo $ZONE | cut -d '-' -f 1`
+    zonel=`echo $ZONE | cut -d '-' -f 2`
+    zone="${zonec}-${zonel}"
+    echo $USED_ZONES | grep $zone &> /dev/null
     if [[ $? == 0 ]]
     then
         get_rand_zone
@@ -130,14 +134,17 @@ create_instances() {
             --image-project=$PROJECT --zone=$ZONE \
             $PREFIX$i $PREFIX$(($i+1)) $PREFIX$(($i+2)) $PREFIX$(($i+3)) $PREFIX$(($i+4)) $PREFIX$(($i+5)) > /dev/null
         fi
-        if [[ $? != 0 ]]
+        RET=$?
+        if [[ $RET != 0 ]]
         then
-            echo $?
-            exit -1
+            echo Exit code: $RET
+            exit $RET
         fi
     done
 
-    # if [ $DELIMAGE ]
+    if [ $SAVEIMAGE ]; then echo "SAVE"; fi;
+
+    # if [ $SAVEIMAGE ]
     # then
         # gcloud compute images delete mpi-image --quiet
     # fi
@@ -149,7 +156,7 @@ create_workers_txt() {
     if ! [ -e mpihosts ]; then touch mpihosts; fi;
     for ((i=0;i<NUMVM;i++))
     do
-        DETAILS=`gcloud compute instances list | sed 's/  \+/ /g' | grep "$PREFIX$i"`
+        DETAILS=`gcloud compute instances list | sed 's/  \+/ /g' | grep "$PREFIX$i "`
         LOCALIP=`echo $DETAILS | cut -d ' ' -f 4`
         INSTANCEZONE=`echo $DETAILS | cut -d ' ' -f 2`
 
@@ -207,7 +214,7 @@ config_worker() {
      echo \"$MASTERIDIP\" | sudo tee -a /etc/hosts; \
      echo \"$WORKERIPID\" | sudo tee -a /etc/hosts; \
      cd /; sudo mount -t nfs master:/home /home; \
-     echo \"master:/home /home nfs\" | sudo tee -a /etc/fstab;" #&> /dev/null
+     echo \"master:/home /home nfs\" | sudo tee -a /etc/fstab;" &> /dev/null
 
     WORKERKEY=`gcloud compute ssh $WORKERID $WZONE --command "cat ~/.ssh/id_rsa.pub"`
 
@@ -216,21 +223,22 @@ config_worker() {
      echo >> ~/.ssh/authorized_keys; \
      echo \"# $WORKERID\" >> ~/.ssh/authorized_keys; \
      echo \"$WORKERKEY\" >> ~/.ssh/authorized_keys; \
-     ssh $WORKERID -t \"exit\"" 
+     ssh $WORKERID -t \"exit\"" &> /dev/null
 }
 
 
-master_scp() {
-    gcloud compute scp mpihosts $MASTERID: $MZONE
+setup_skel() {
+    echo "Set up /etc/skel for new users"
+    gcloud compute scp mpihosts $MASTERID: $MZONE &> /dev/null
     gcloud compute ssh $MASTERID $MZONE --command \
     "cd /etc/skel && \
      sudo wget http://csinparallel.cs.stolaf.edu/CSinParallel.tar.gz && \
      sudo tar -xf CSinParallel.tar.gz && sudo rm CSinParallel.tar.gz && \
      sudo cp ~/mpihosts /etc/skel && \
      sudo cp -r ~/.ssh . && \
-     echo | sudo tee .ssh/authorized_keys && \
-     echo \"# Master\" | sudo tee -a .ssh/authorized_keys && \
-     cat ~/.ssh/id_rsa.pub | sudo tee -a .ssh/authorized_keys"
+     echo | sudo tee .ssh/authorized_keys &> /dev/null && \
+     echo \"# Master\" | sudo tee -a .ssh/authorized_keys &> /dev/null && \
+     cat ~/.ssh/id_rsa.pub | sudo tee -a .ssh/authorized_keys &> /dev/null"
 }
 
 
@@ -258,4 +266,4 @@ for ((i=1;i<NUMVM;i++)); do
     config_worker $i
 done
 
-master_scp
+setup_skel

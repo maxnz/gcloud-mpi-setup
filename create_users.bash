@@ -32,20 +32,44 @@ do
         break
     fi
 
-    gcloud compute ssh $MASTERID $MZONE --command \
-    "sudo useradd -m -s /bin/bash $USERNAME;
-     echo | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
-     echo \"# $USERNAME\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
-     echo \"$KEY\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;"
+    RET=`gcloud compute ssh $MASTERID $MZONE --command \
+    "sudo useradd -m -s /bin/bash $USERNAME;" 2>&1`
 
-    let "NUMVM=$(wc workers -l | cut -d ' ' -f 1)"
+    echo $RET | grep "already exists" &> /dev/null
+    RET=$?
+    RET2=1
 
-    for ((i=2;i<=NUMVM;i++))
-    do
-        WORKER=`sed "${i}q;d" workers`
-        WORKERID=`echo $WORKER | cut -d ' ' -f 2`
-        WZONE=`echo $WORKER | cut -d ' ' -f 3`
-        WZONE="--zone $WZONE"
-        gcloud compute ssh $WORKERID $WZONE --command "sudo useradd -M -s /bin/bash $USERNAME"
-    done
+    if [[ $RET == 0 ]]
+    then
+        echo "User $USERNAME exists - checking key"
+
+        gcloud compute ssh $MASTERID $MZONE --command "sudo cat /home/$USERNAME/.ssh/authorized_keys" | \
+        grep -Fx "$KEY" &> /dev/null
+        if [[ $? == 0 ]]; then RET2=0; fi;
+    else
+        echo "Creating new user $USERNAME"
+    
+        let "NUMVM=$(wc workers -l | cut -d ' ' -f 1)"
+        for ((i=2;i<=NUMVM;i++))
+        do
+            WORKER=`sed "${i}q;d" workers`
+            WORKERID=`echo $WORKER | cut -d ' ' -f 2`
+            WZONE=`echo $WORKER | cut -d ' ' -f 3`
+            WZONE="--zone $WZONE"
+            gcloud compute ssh $WORKERID $WZONE --command "sudo useradd -M -s /bin/bash $USERNAME;" &> /dev/null
+            echo -n '.'
+        done
+        echo
+    fi
+
+    if [[ $RET2 == 1 ]]
+    then
+        echo "Adding new SSH key"
+        
+        gcloud compute ssh $MASTERID $MZONE --command \
+        "echo | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
+         echo \"# $USERNAME\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
+         echo \"$KEY\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;"
+    fi
+    echo
 done
