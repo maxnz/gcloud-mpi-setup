@@ -96,7 +96,7 @@ do
     echo
 done
 
-echo -n "Master Node IP: "
+echo -n "Master Node IP..."
 gcloud compute instances list | sed 's/  \+/ /g' | grep $MASTERID | cut -d ' ' -f 5
 
 if [[ $PROJECT != $OLD_PROJECT ]]
