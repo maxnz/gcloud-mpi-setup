@@ -9,9 +9,7 @@ wget http://www.mpich.org/static/downloads/$MPIVERSION/mpich-$MPIVERSION.tar.gz
 tar -xzf mpich-$MPIVERSION.tar.gz
 
 cd mpich-$MPIVERSION && ./configure && make && make install
-cd
-ls
-pwd
+cd ..
 rm -r mpich-$MPIVERSION
 rm mpich-$MPIVERSION.tar.gz
 
