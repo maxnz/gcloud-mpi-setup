@@ -34,7 +34,7 @@ gcloud compute instances list | sed 's/  \+/ /g' | grep $MASTERID | cut -d ' ' -
 
 while true 
 do
-    echo "Enter new username"
+    echo "Enter new username (leave blank to quit)"
     read USERNAME
 
     if [[ $USERNAME == "" ]]
