@@ -33,7 +33,7 @@ ask_project() {
 
 # Ask if user wants to save the mpi-image
 ask_save_img() {
-    echo "Save image after setup? (Saving image will incur costs)"
+    echo "Save image after setup? (y/N) (Saving image will incur costs)"
     read saveimg
     saveimg=`echo $saveimg | head -c1`
     if [[ $saveimg == 'y' || $saveimg == 'Y' ]]
@@ -76,6 +76,13 @@ create_image() {
         gcloud compute instances create $VMNAME \
         --machine-type=n1-standard-2 --image-family=debian-9 \
         --image-project=debian-cloud --zone=$ZONE > /dev/null
+
+        RET=$?
+        if [[ $RET != 0 ]]
+        then
+            echo Exit code: $RET
+            exit $RET
+        fi
 
         gcloud compute scp mpi_setup.bash $VMNAME: --zone $ZONE
         gcloud compute ssh $VMNAME --zone $ZONE \
@@ -235,7 +242,8 @@ setup_skel() {
      sudo cp -r ~/.ssh .; \
      echo | sudo tee .ssh/authorized_keys &> /dev/null; \
      echo \"# Master\" | sudo tee -a .ssh/authorized_keys &> /dev/null; \
-     cat ~/.ssh/id_rsa.pub | sudo tee -a .ssh/authorized_keys &> /dev/null"
+     cat ~/.ssh/id_rsa.pub | sudo tee -a .ssh/authorized_keys &> /dev/null; \
+     sudo cp -r /etc/skel/CSinParallel ~"
 }
 
 
