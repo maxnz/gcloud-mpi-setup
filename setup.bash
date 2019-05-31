@@ -1,22 +1,40 @@
 #!/bin/bash
 
-USED_ZONES=''
+USED_ZONES=
 OLD_PROJECT=`gcloud config list project 2> /dev/null | grep "project = " | cut -d ' ' -f 3`
-PROJECT=$OLD_PROJECT
+PROJECT=
 PREFIX="mpi-"
-SAVEIMAGE=0
+SAVEIMAGE=-1
+NUMVM=-1
+re_num='^[0-9]+$'
+QUIET=0
 
+invalid_argument() {
+    if [ -z "$2" ]
+    then
+        echo "Invalid argument $1"
+    else
+        echo "Invalid argument $1 for flag '$2'"
+    fi
+    exit 1
+}
+
+missing_argument() {
+    echo "Missing argument for $1"
+    exit 1
+}
 
 # Set the project being set up
 set_project() {
-    gcloud projects list | grep $1
+    gcloud projects list | sed 's/  \+/ /g' | grep "$1 " &> /dev/null
     if [[ $? == 1 ]]
     then
-        echo "Invalid project $1"
+        echo "Invalid project id $1"
         exit 1
     fi
 
     gcloud config set project $1 &> /dev/null
+    PROJECT=$1
 }
 
 # Ask user for the project they want to use
@@ -26,8 +44,9 @@ ask_project() {
 
     if [[ $project != "" ]]
     then
-        PROJECT=$project
-        set_project $PROJECT
+        set_project $project
+    else
+        set_project $OLD_PROJECT
     fi
 }
 
@@ -60,6 +79,26 @@ get_rand_zone() {
     fi
 }
 
+
+confirm_opts() {
+    echo
+    echo "Configuration:"
+    echo "Project:           $PROJECT"
+    echo "Cluster Size:      $NUMVM VMs"
+    echo -n "Save MPI Image:    "
+    if [[ $SAVEIMAGE == 1 ]]; then echo "YES"; else echo "NO"; fi;
+    if [[ $QUIET == 1 ]]; then return; fi;
+    echo -n "Continue? [Y/n] "
+    read con
+    con=`echo $con | head -c1`
+    if [[ $con == 'n' || $con == 'N' ]]
+    then
+        echo "Abort"
+        exit -1
+    fi
+}
+
+
 # Create MPI image
 create_image() {
     # check if image exists
@@ -73,16 +112,16 @@ create_image() {
         IMAGEZONE=$ZONE
         VMNAME="image-vm"
         
-        gcloud compute instances create $VMNAME \
-        --machine-type=n1-standard-2 --image-family=debian-9 \
-        --image-project=debian-cloud --zone=$ZONE > /dev/null
+        RET=1
+        while [[ $RET != 0 ]]
+        do
+            gcloud compute instances create $VMNAME \
+            --machine-type=n1-standard-2 --image-family=debian-9 \
+            --image-project=debian-cloud --zone=$ZONE > /dev/null
 
-        RET=$?
-        if [[ $RET != 0 ]]
-        then
-            echo Exit code: $RET
-            exit $RET
-        fi
+            RET=$?
+        done
+
 
         gcloud compute scp mpi_setup.bash $VMNAME: --zone $ZONE
         gcloud compute ssh $VMNAME --zone $ZONE \
@@ -142,12 +181,13 @@ create_instances() {
         RET=$?
         if [[ $RET != 0 ]]
         then
+            echo "Exception while creating VMs. Please delete existing VMs and try again."
             echo Exit code: $RET
             exit $RET
         fi
     done
 
-    if [[ $SAVEIMAGE == 0 ]]
+    if [[ $SAVEIMAGE != 1 ]]
     then 
         gcloud compute images delete mpi-image --quiet
     fi
@@ -247,18 +287,94 @@ setup_skel() {
 }
 
 
-echo "Number of VMs"
-read NUMVM
 
-re='^[0-9]+$'
-if ! [[ $NUMVM =~ $re ]] ; then
-   echo "error: Not a number" >&2; exit 1
+while test $# -gt 0
+do
+    case "$1" in
+        -h|--help)
+            echo "GCloud MPI Cluster Setup Script"
+            echo
+            echo "Options:"
+            echo "-h,   --help          show this help message"
+            echo "-q,   --quiet         run the script with default options (unless specified otherwise):"
+            echo "                          default project, 8 VMs, delete image"
+            echo "-p,   --project ID    set the project to use (ID = full project id)"
+            echo "-n  N                 set the number of nodes (N) in the cluster"
+            echo "-s,   --save-image    save the MPI image after creating VMs (this will incur costs)"
+            echo "      --delete-image  delete the MPI image after creating VMs (Default)"
+            exit -1
+            ;;
+        -q|--quiet)
+            shift
+            if [[ $SAVEIMAGE == -1 ]] ; then SAVEIMAGE=0; fi;
+            if [[ $PROJECT == "" ]]; then PROJECT=$OLD_PROJECT; fi;
+            if [[ $NUMVM == -1 ]]; then NUMVM=8; fi;
+            QUIET=1
+            ;;
+        -n)
+            shift
+            if test $# -gt 0
+            then
+                NUMVM=$1
+                if ! [[ $NUMVM =~ $re_num ]]
+                then
+                    invalid_argument $NUMVM "-n"
+                fi
+                shift
+            else
+                missing_argument "-n"
+            fi
+            ;;
+        -s|--save-image)
+            SAVEIMAGE=1
+            shift
+            ;;
+        --delete-image)
+            SAVEIMAGE=0
+            shift
+            ;;
+        -p|--project)
+            shift
+            if test $# -gt 0
+            then
+                set_project $1
+                shift
+            else
+                missing_argument "-p|--project"
+            fi
+            ;;
+        *)
+            echo "Unrecognized flag $1"
+            shift
+            ;;
+    esac
+done
+
+if [[ $PROJECT == "" ]]
+then
+    ask_project
 fi
 
-ask_project
-ask_save_img
+if [[ $NUMVM == -1 ]]
+then
+    echo "Number of VMs"
+    read NUMVM
+
+    re='^[0-9]+$'
+    if ! [[ $NUMVM =~ $re ]] ; then
+       invalid_argument $NUMVM
+    fi
+fi
+
+if [[ $SAVEIMAGE == -1 ]]
+then
+    ask_save_img
+fi
+
+confirm_opts
 
 create_image
+exit 0
 create_instances
 create_workers_txt
 
