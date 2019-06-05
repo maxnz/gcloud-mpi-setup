@@ -329,7 +329,7 @@ do
             SAVEIMAGE=1
             shift
             ;;
-        --delete-image)
+        -d|--delete-image)
             SAVEIMAGE=0
             shift
             ;;
@@ -374,7 +374,6 @@ fi
 confirm_opts
 
 create_image
-exit 0
 create_instances
 create_workers_txt
 
