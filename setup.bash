@@ -301,7 +301,7 @@ do
             echo "-p,   --project ID    set the project to use (ID = full project id)"
             echo "-n  N                 set the number of nodes (N) in the cluster"
             echo "-s,   --save-image    save the MPI image after creating VMs (this will incur costs)"
-            echo "      --delete-image  delete the MPI image after creating VMs (Default)"
+            echo "-d,   --delete-image  delete the MPI image after creating VMs (Default)"
             exit -1
             ;;
         -q|--quiet)
