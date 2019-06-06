@@ -114,7 +114,7 @@ auto_entry() {
 
     if [[ -z $USERCOL ]]
     then
-        echo -n "Specify user column number: "
+        echo -n "Specify username column number: "
         read USERCOL
         if ! [[ $USERCOL =~ $re_num ]]
         then
@@ -124,7 +124,7 @@ auto_entry() {
 
     if [[ -z $KEYCOL ]]
     then
-        echo -n "Specify key column number: "
+        echo -n "Specify ssh key column number: "
         read KEYCOL
         if ! [[ $KEYCOL =~ $re_num ]]
         then
@@ -207,13 +207,15 @@ while test $# -gt 0
 do
     case "$1" in
         -h|--help)
-            echo "GCloud MPI Cluster Setup Script"
+            echo "GCloud MPI Cluster User Setup Script"
             echo
             echo "Options:"
             echo "-h,   --help          show this help message"
-            echo "-k N                  specify the column number with the ssh keys"
             echo "-p,   --project ID    set the project to use (ID = full project id)"
-            echo "-u N                  specify the column number with the usernames"
+            echo
+            echo "-f FILE               specify the .csv file (FILE) to use"
+            echo "-k N                  specify the column number (N) with the ssh keys"
+            echo "-u N                  specify the column number (N) with the usernames"
             exit -1
             ;;
         -f)

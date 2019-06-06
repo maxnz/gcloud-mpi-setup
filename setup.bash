@@ -12,7 +12,7 @@ QUIET=0
 
 # Ask user for the project they want to use
 ask_project() {
-    echo "Project Name (leave blank to use default project $OLD_PROJECT)"
+    echo -n "Project Name (leave blank to use current project $OLD_PROJECT): "
     read project
 
     if [[ $project != "" ]]
@@ -261,12 +261,13 @@ do
             echo
             echo "Options:"
             echo "-h,   --help          show this help message"
-            echo "-q,   --quiet         run the script with default options (unless specified otherwise):"
-            echo "                          default project, 8 VMs, delete image"
             echo "-p,   --project ID    set the project to use (ID = full project id)"
+            echo
+            echo "-q,   --quiet         run the script with default options (unless specified otherwise):"
+            echo "                          current project, 8 VMs, delete image"
             echo "-n  N                 set the number of nodes (N) in the cluster"
-            echo "-s,   --save-image    save the MPI image after creating VMs (this will incur costs)"
             echo "-d,   --delete-image  delete the MPI image after creating VMs (Default)"
+            echo "-s,   --save-image    save the MPI image after creating VMs (this will incur costs)"
             exit -1
             ;;
         -q|--quiet)
