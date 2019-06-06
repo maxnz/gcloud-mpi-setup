@@ -9,33 +9,6 @@ NUMVM=-1
 re_num='^[0-9]+$'
 QUIET=0
 
-invalid_argument() {
-    if [ -z "$2" ]
-    then
-        echo "Invalid argument $1"
-    else
-        echo "Invalid argument $1 for flag '$2'"
-    fi
-    exit 1
-}
-
-missing_argument() {
-    echo "Missing argument for $1"
-    exit 1
-}
-
-# Set the project being set up
-set_project() {
-    gcloud projects list | sed 's/  \+/ /g' | grep "$1 " &> /dev/null
-    if [[ $? == 1 ]]
-    then
-        echo "Invalid project id $1"
-        exit 1
-    fi
-
-    gcloud config set project $1 &> /dev/null
-    PROJECT=$1
-}
 
 # Ask user for the project they want to use
 ask_project() {
@@ -52,7 +25,7 @@ ask_project() {
 
 # Ask if user wants to save the mpi-image
 ask_save_img() {
-    echo "Save image after setup? (y/N) (Saving image will incur costs)"
+    echo -n "Saving MPI image will incur costs. Save image after setup? (y/N): "
     read saveimg
     saveimg=`echo $saveimg | head -c1`
     if [[ $saveimg == 'y' || $saveimg == 'Y' ]]
@@ -88,7 +61,7 @@ confirm_opts() {
     echo -n "Save MPI Image:    "
     if [[ $SAVEIMAGE == 1 ]]; then echo "YES"; else echo "NO"; fi;
     if [[ $QUIET == 1 ]]; then return; fi;
-    echo -n "Continue? [Y/n] "
+    echo -n "Continue? (Y/n): "
     read con
     con=`echo $con | head -c1`
     if [[ $con == 'n' || $con == 'N' ]]
@@ -215,15 +188,6 @@ create_workers_txt() {
     done
 }
 
-# Set master environment variables
-config_master_vars() {
-    MASTER=`grep "master" workers`
-    MASTERID=`echo $MASTER | cut -d ' ' -f 2`
-    MASTERIDIP=`echo $MASTER | cut -d ' ' -f 1-2,4`
-    MZONE=`echo $MASTER | cut -d ' ' -f 3`
-    MZONE="--zone $MZONE"
-}
-
 # Configure master
 config_master() {
     echo "---MASTER 0---"
@@ -287,6 +251,7 @@ setup_skel() {
 }
 
 
+source "./common.bash"
 
 while test $# -gt 0
 do
@@ -345,7 +310,7 @@ do
             ;;
         *)
             echo "Unrecognized flag $1"
-            shift
+            exit 1
             ;;
     esac
 done
@@ -357,7 +322,7 @@ fi
 
 if [[ $NUMVM == -1 ]]
 then
-    echo "Number of VMs"
+    echo -n "Number of VMs: "
     read NUMVM
 
     re='^[0-9]+$'

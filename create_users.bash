@@ -12,37 +12,9 @@ KEYCOL=
 re_num='^[0-9]+$'
 
 
-invalid_argument() {
-    if [ -z "$2" ]
-    then
-        echo "Invalid argument $1"
-    else
-        echo "Invalid argument $1 for flag '$2'"
-    fi
-    exit 1
-}
-
-missing_argument() {
-    echo "Missing argument for $1"
-    exit 1
-}
-
-# Set the project being set up
-set_project() {
-    gcloud projects list | grep $1
-    if [[ $? == 1 ]]
-    then
-        echo "Invalid project $1"
-        exit 1
-    fi
-
-    gcloud config set project $1 &> /dev/null
-}
-
 add_user() {
-
     RET=`gcloud compute ssh $MASTERID $MZONE --command \
-        "sudo useradd -m -s /bin/bash $USERNAME;" 2>&1`
+        "sudo useradd -m -s /bin/bash \"$USERNAME\";" 2>&1`
 
     echo $RET | grep "already exists" &> /dev/null
     RET=$?
@@ -50,13 +22,13 @@ add_user() {
 
     if [[ $RET == 0 ]]
     then
-        echo "User $USERNAME exists - checking key"
+        echo "$USERNAME: User exists - checking key"
 
         gcloud compute ssh $MASTERID $MZONE --command "sudo cat /home/$USERNAME/.ssh/authorized_keys" | \
         grep -Fx "$KEY" &> /dev/null
         if [[ $? == 0 ]]; then RET2=0; fi;
     else
-        echo "Creating new user $USERNAME"
+        echo "$USERNAME: Creating new user"
 
         let "NUMVM=$(wc workers -l | cut -d ' ' -f 1)"
         for ((i=2;i<=NUMVM;i++))
@@ -79,14 +51,12 @@ add_user() {
          echo \"# $USERNAME\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
          echo \"$KEY\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;"
     fi
-    echo
-
 }
 
 ask_project() {
     if [[ $PSET == 0 ]]
     then
-        echo "Project Name (leave blank to use default project $OLD_PROJECT)"
+        echo -n "Project Name (leave blank to use default project $OLD_PROJECT): "
         read project
 
         if [[ $project != "" ]]
@@ -98,11 +68,9 @@ ask_project() {
 
     touch workers.temp
     gcloud compute instances list > workers.temp
-
 }
 
 get_worker() {
-
     WORKER=`sed "$(($1 + 1))q;d" workers.temp | grep "RUNNING" | sed 's/  \+/ /g' | cut -d ' ' -f 4`
     WORKER="$WORKER $(sed "$(($1 + 1))q;d" workers.temp | grep "RUNNING" | sed 's/  \+/ /g' | cut -d ' ' -f 1,2)"
 
@@ -127,14 +95,6 @@ get_workers() {
     rm workers.temp
 }
 
-get_master() {
-    MASTER=`grep "master" workers`
-    MASTERID=`echo $MASTER | cut -d ' ' -f 2`
-    MASTERIDIP=`echo $MASTER | cut -d ' ' -f 1-2,4`
-    MZONE=`echo $MASTER | cut -d ' ' -f 3`
-    MZONE="--zone $MZONE"
-}
-
 auto_entry() {
     apt list csvtool | grep "installed" &> /dev/null
     if [[ $? != 0 ]]
@@ -142,7 +102,7 @@ auto_entry() {
         if [ "$EUID" -ne 0 ]
         then 
             echo "sudo required"
-            exit
+            exit 1
         else
             sudo apt install csvtool
         fi
@@ -150,11 +110,11 @@ auto_entry() {
 
     ask_project
     get_workers
-    get_master
+    config_master_vars
 
     if [[ -z $USERCOL ]]
     then
-        echo "Specify user column number"
+        echo -n "Specify user column number: "
         read USERCOL
         if ! [[ $USERCOL =~ $re_num ]]
         then
@@ -164,7 +124,7 @@ auto_entry() {
 
     if [[ -z $KEYCOL ]]
     then
-        echo "Specify key column number"
+        echo -n "Specify key column number: "
         read KEYCOL
         if ! [[ $KEYCOL =~ $re_num ]]
         then
@@ -178,8 +138,21 @@ auto_entry() {
     do
         USERNAME=`csvtool col $USERCOL $FILENAME | sed "${i}q;d"`
         KEY=`csvtool col $KEYCOL $FILENAME | sed "${i}q;d"`
-        echo $USERNAME
-        echo $KEY
+
+        echo $USERNAME | grep " " &> /dev/null
+        if [[ $? == 0 || $USERNAME == "" ]]
+        then
+            echo "$USERNAME: Skipping Username: Invalid Username"
+            continue
+        fi
+
+        keywc=`echo $KEY | wc -w | cut -d ' ' -f 1`
+
+        if [[ $KEY == "" || $keywc != 3 ]]
+        then
+            echo "$USERNAME: Skipping Username: Invalid SSH key"
+            continue
+        fi
 
         add_user
     done
@@ -189,22 +162,27 @@ auto_entry() {
 
 
 manual_entry() {
-
     ask_project
     get_workers
-    get_master
+    config_master_vars
 
     while true 
     do
-        echo "Enter new username (leave blank to quit)"
+        echo
+        echo -n "Enter new username (leave blank to quit): "
         read USERNAME
 
-        if [[ $USERNAME == "" ]]
+        echo $USERNAME | grep " " &> /dev/null
+        if [[ $? == 0 ]]
+        then
+            echo "Invalid Username"
+            continue
+        elif [[ $USERNAME == "" ]]
         then
             break
         fi
 
-        echo "Enter new user's SSH key"
+        echo -n "Enter SSH key for $USERNAME: "
         read KEY
 
         keywc=`echo $KEY | wc -w | cut -d ' ' -f 1`
@@ -214,14 +192,16 @@ manual_entry() {
             break
         elif [[ $keywc != 3 ]]
         then
-            echo "Need 3 fields"
-            break
+            echo "Invalid ssh key: Need 3 fields"
+            echo "Skipping user $USERNAME"
+            continue
         fi
         add_user
     done
 }
 
 
+source "./common.bash"
 
 while test $# -gt 0
 do
@@ -288,17 +268,17 @@ do
             ;;
         *)
             echo "Unrecognized flag $1"
-            shift
+            exit 1
             ;;
     esac
 done
 
 if [[ $AUTO == 1 ]]
 then
-    echo "A"
+    echo "Automatic Entry"
     auto_entry
 else
-    echo "M"
+    echo "Manual Entry"
     manual_entry
 fi
 
