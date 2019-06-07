@@ -95,7 +95,30 @@ get_workers() {
     rm workers.temp
 }
 
+# Validate username format
+validate_username() {
+    echo $USERNAME | grep " " &> /dev/null
+    if [[ $? == 0 || $USERNAME == "" ]]
+    then
+        echo "$USERNAME: Skipping Username: Invalid Username"
+        continue
+    fi
+}
+
+# Validate key format
+validate_key() {
+    keywc=`echo $KEY | wc -w | cut -d ' ' -f 1`
+
+    if [[ $KEY == "" || $keywc != 3 ]]
+    then
+        echo "$USERNAME: Skipping Username: Invalid SSH key"
+        continue
+    fi
+}
+
+# Automated entry from a .csv file
 auto_entry() {
+    # Install csvtool if necessary
     apt list csvtool | grep "installed" &> /dev/null
     if [[ $? != 0 ]]
     then
@@ -112,6 +135,7 @@ auto_entry() {
     get_workers
     config_master_vars
 
+    # Get username column if necessary
     if [[ -z $USERCOL ]]
     then
         echo -n "Specify username column number: "
@@ -122,6 +146,7 @@ auto_entry() {
         fi
     fi
 
+    # Get key column if necessary
     if [[ -z $KEYCOL ]]
     then
         echo -n "Specify ssh key column number: "
@@ -134,26 +159,14 @@ auto_entry() {
 
     NUMKEY=`csvtool height $FILENAME`
     
+    # Add all users
     for ((i=2;i<=NUMKEY;i++))
     do
         USERNAME=`csvtool col $USERCOL $FILENAME | sed "${i}q;d"`
         KEY=`csvtool col $KEYCOL $FILENAME | sed "${i}q;d"`
 
-        echo $USERNAME | grep " " &> /dev/null
-        if [[ $? == 0 || $USERNAME == "" ]]
-        then
-            echo "$USERNAME: Skipping Username: Invalid Username"
-            continue
-        fi
-
-        keywc=`echo $KEY | wc -w | cut -d ' ' -f 1`
-
-        if [[ $KEY == "" || $keywc != 3 ]]
-        then
-            echo "$USERNAME: Skipping Username: Invalid SSH key"
-            continue
-        fi
-
+        validate_username
+        validate_key
         add_user
     done
 
@@ -172,12 +185,7 @@ manual_entry() {
         echo -n "Enter new username (leave blank to quit): "
         read USERNAME
 
-        echo $USERNAME | grep " " &> /dev/null
-        if [[ $? == 0 ]]
-        then
-            echo "Invalid Username"
-            continue
-        elif [[ $USERNAME == "" ]]
+        if [[ $USERNAME == "" ]]
         then
             break
         fi
@@ -185,17 +193,13 @@ manual_entry() {
         echo -n "Enter SSH key for $USERNAME: "
         read KEY
 
-        keywc=`echo $KEY | wc -w | cut -d ' ' -f 1`
-
         if [[ $KEY == "" ]]
         then
             break
-        elif [[ $keywc != 3 ]]
-        then
-            echo "Invalid ssh key: Need 3 fields"
-            echo "Skipping user $USERNAME"
-            continue
         fi
+
+        validate_username
+        validate_key
         add_user
     done
 }
