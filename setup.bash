@@ -248,7 +248,8 @@ setup_skel() {
      echo | sudo tee .ssh/authorized_keys &> /dev/null; \
      echo \"# Master\" | sudo tee -a .ssh/authorized_keys &> /dev/null; \
      cat ~/.ssh/id_rsa.pub | sudo tee -a .ssh/authorized_keys &> /dev/null; \
-     sudo cp -r /etc/skel/CSinParallel ~"
+     sudo cp -r /etc/skel/CSinParallel ~; \
+     sudo chmod -R 777 ~/CSinParallel;"
 }
 
 
