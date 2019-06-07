@@ -39,6 +39,7 @@ get_rand_zone() {
     z=$RANDOM
     numzones=`wc zones.txt -l | cut -d ' ' -f 1`
     let "z %= $numzones"
+    let "z++"
     ZONE=`sed "${z}q;d" zones.txt`
     zonec=`echo $ZONE | cut -d '-' -f 1`
     zonel=`echo $ZONE | cut -d '-' -f 2`
