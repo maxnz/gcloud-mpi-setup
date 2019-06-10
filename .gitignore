@@ -1,5 +1,5 @@
 .*/
 mpihosts
 workers
-workers.temp
+*.temp
 *.csv

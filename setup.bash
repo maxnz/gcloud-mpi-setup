@@ -1,11 +1,13 @@
 #!/bin/bash
 
 USED_ZONES=
+NUMUSEDZONES=0
 OLD_PROJECT=`gcloud config list project 2> /dev/null | grep "project = " | cut -d ' ' -f 3`
 PROJECT=
 PREFIX="mpi-"
 SAVEIMAGE=-1
 NUMVM=-1
+CORESPERVM=2
 re_num='^[0-9]+$'
 QUIET=0
 
@@ -36,6 +38,11 @@ ask_save_img() {
 
 # Get a random zone from zones.txt
 get_rand_zone() {
+    if [[ $NUMUSEDZONES == 20 ]]
+    then
+        echo "No remaining zones"
+        exit 1
+    fi
     z=$RANDOM
     numzones=`wc zones.txt -l | cut -d ' ' -f 1`
     let "z %= $numzones"
@@ -50,9 +57,67 @@ get_rand_zone() {
         get_rand_zone
     else
         USED_ZONES="$USED_ZONES $ZONE"
+        let "NUMUSEDZONES++"
+
+        touch quotas.temp
+        gcloud compute regions describe $zone > quotas.temp
+
+        LINES=`wc quotas.temp -l | cut -d ' ' -f 1`
+        for ((j=1;j<=LINES;j++))
+        do
+            LINE=`sed "${j}q;d" quotas.temp`
+            echo $LINE | grep "limit:" &> /dev/null
+            if [[ $? == 0 ]]
+            then
+                sed "$(($j+1))q;d" quotas.temp | grep "CPUS" &> /dev/null
+                if [[ $? == 0 ]]
+                then
+                    REGCPUUSAGE=`sed "$(($j+2))q;d" quotas.temp | sed 's/  \+/ /g' | cut -d ' ' -f 3 | cut -d '.' -f 1`
+                    REGCPUQUOTA=`sed "${j}q;d" quotas.temp | sed 's/  \+/ /g' | cut -d ' ' -f 3 | cut -d '.' -f 1`
+                    let "REGREMCPUS = $REGCPUQUOTA - $REGCPUUSAGE"
+                    if [ $REGREMCPUS -lt $1 ]
+                    then
+                        echo "Not enough CPUs remaining in region quota: $REGREMCPUS remaining in $zone"
+                        get_rand_zone
+                    fi
+                    break
+                fi
+            fi
+        done
+        rm quotas.temp
     fi
 }
 
+get_quota() {
+    touch quotas.temp
+    gcloud compute project-info describe --project $PROJECT > quotas.temp
+
+    LINES=`wc quotas.temp -l | cut -d ' ' -f 1`
+    for ((i=1;i<=LINES;i++))
+    do
+        LINE=`sed "${i}q;d" quotas.temp`
+
+        echo $LINE | grep "limit:" &> /dev/null
+        if [[ $? == 0 ]]
+        then
+            sed "$(($i+1))q;d" quotas.temp | grep "CPUS_ALL_REGIONS" &> /dev/null
+            if [[ $? == 0 ]]
+            then
+                CPUUSAGE=`sed "$(($i+2))q;d" quotas.temp | sed 's/  \+/ /g' | cut -d ' ' -f 3 | cut -d '.' -f 1`
+                CPUQUOTA=`sed "${i}q;d" quotas.temp | sed 's/  \+/ /g' | cut -d ' ' -f 3 | cut -d '.' -f 1`
+                let "REMCPUS = $CPUQUOTA - $CPUUSAGE"
+                if [ $REMCPUS -lt $VMCORES ]
+                then
+                    echo "Not enough CPUs remaining in overall quota: $REMCPUS remaining"
+                    rm quotas.temp
+                    exit 1
+                fi
+                break
+            fi
+        fi
+    done
+    rm quotas.temp
+}
 
 confirm_opts() {
     echo
@@ -82,7 +147,7 @@ create_image() {
     if [[ $CONTAINSIMAGE == 1 ]]
     then
         echo "Creating new MPI image"
-        get_rand_zone
+        get_rand_zone 2
         IMAGEZONE=$ZONE
         VMNAME="image-vm"
         
@@ -113,8 +178,10 @@ create_instances() {
     echo "Creating VMs"
     for ((i=0;i<NUMVM;i+=6))
     do
-        get_rand_zone
         let "rem = $NUMVM - $i"
+        if [ $rem -gt 5 ]; then corect=6; else corect=$rem; fi;
+        let "corect *= $CORESPERVM"
+        get_rand_zone $corect
 
         if [[ $rem == 1 ]]
         then
@@ -333,14 +400,15 @@ then
        invalid_argument $NUMVM
     fi
 fi
+let "VMCORES= $CORESPERVM * $NUMVM"
 
 if [[ $SAVEIMAGE == -1 ]]
 then
     ask_save_img
 fi
 
+get_quota
 confirm_opts
-
 create_image
 create_instances
 create_workers_txt
