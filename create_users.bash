@@ -125,6 +125,7 @@ auto_entry() {
         if [ "$EUID" -ne 0 ]
         then 
             echo "sudo required"
+            echo "Try running the script again with sudo"
             exit 1
         else
             sudo apt install csvtool
