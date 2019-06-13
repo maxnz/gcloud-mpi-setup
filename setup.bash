@@ -4,7 +4,7 @@ USED_ZONES=
 NUMUSEDZONES=0
 OLD_PROJECT=`gcloud config list project 2> /dev/null | grep "project = " | cut -d ' ' -f 3`
 PROJECT=
-PREFIX="mpi-"
+PREFIX="mpi-"           # Must start with a letter
 SAVEIMAGE=-1
 NUMVM=-1
 CORESPERVM=2
