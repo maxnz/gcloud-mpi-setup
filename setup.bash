@@ -170,6 +170,8 @@ create_image() {
         gcloud compute images create mpi-image --source-disk $VMNAME --source-disk-zone $IMAGEZONE > /dev/null
 
         gcloud compute instances delete $VMNAME --zone $ZONE --quiet
+    else
+        echo "Using existing MPI image"
     fi
 }
 
@@ -248,7 +250,8 @@ create_workers_txt() {
         if [[ $i == 0 ]]
         then
             echo "$LOCALIP $PREFIX$i $INSTANCEZONE master" > workers
-            echo > mpihosts
+            if [ -e mpihosts ]; then rm mpihosts; fi;
+            touch mpihosts
         else
             echo "$LOCALIP $PREFIX$i $INSTANCEZONE" >> workers
             echo $PREFIX$i >> mpihosts
@@ -310,7 +313,7 @@ setup_skel() {
     "cd /etc/skel; \
      sudo wget http://csinparallel.cs.stolaf.edu/CSinParallel.tar.gz; \
      sudo tar -xf CSinParallel.tar.gz && sudo rm CSinParallel.tar.gz; \
-     sudo cp ~/mpihosts /etc/skel; \
+     for file in \$(sudo find /etc/skel/CSinParallel -name cluster_nodes); do sudo cp ~/mpihosts \$file; done; \
      sudo cp -r ~/.ssh .; \
      echo | sudo tee .ssh/authorized_keys &> /dev/null; \
      echo \"# Master\" | sudo tee -a .ssh/authorized_keys &> /dev/null; \
