@@ -7,7 +7,7 @@ PROJECT=
 PREFIX="mpi-"           # Must start with a letter
 SAVEIMAGE=-1
 NUMVM=-1
-CORESPERVM=2
+CORESPERVM=4
 re_num='^[0-9]+$'
 QUIET=0
 
@@ -188,36 +188,36 @@ create_instances() {
         if [[ $rem == 1 ]]
         then
             gcloud compute instances create \
-            --machine-type=n1-standard-2 --image=mpi-image \
+            --machine-type=n1-standard-$CORESPERVM --image=mpi-image \
             --image-project=$PROJECT --zone=$ZONE \
             $PREFIX$i > /dev/null
         elif [[ $rem == 2 ]]
         then
             gcloud compute instances create \
-            --machine-type=n1-standard-2 --image=mpi-image \
+            --machine-type=n1-standard-$CORESPERVM --image=mpi-image \
             --image-project=$PROJECT --zone=$ZONE \
             $PREFIX$i $PREFIX$(($i+1)) > /dev/null
         elif [[ $rem == 3 ]]
         then
             gcloud compute instances create \
-            --machine-type=n1-standard-2 --image=mpi-image \
+            --machine-type=n1-standard-$CORESPERVM --image=mpi-image \
             --image-project=$PROJECT --zone=$ZONE \
             $PREFIX$i $PREFIX$(($i+1)) $PREFIX$(($i+2)) > /dev/null
         elif [[ $rem == 4 ]]
         then
             gcloud compute instances create \
-            --machine-type=n1-standard-2 --image=mpi-image \
+            --machine-type=n1-standard-$CORESPERVM --image=mpi-image \
             --image-project=$PROJECT --zone=$ZONE \
             $PREFIX$i $PREFIX$(($i+1)) $PREFIX$(($i+2)) $PREFIX$(($i+3)) > /dev/null
         elif [[ $rem == 5 ]]
         then
             gcloud compute instances create \
-            --machine-type=n1-standard-2 --image=mpi-image \
+            --machine-type=n1-standard-$CORESPERVM --image=mpi-image \
             --image-project=$PROJECT --zone=$ZONE \
             $PREFIX$i $PREFIX$(($i+1)) $PREFIX$(($i+2)) $PREFIX$(($i+3)) $PREFIX$(($i+4)) > /dev/null
         else
             gcloud compute instances create \
-            --machine-type=n1-standard-2 --image=mpi-image \
+            --machine-type=n1-standard-$CORESPERVM --image=mpi-image \
             --image-project=$PROJECT --zone=$ZONE \
             $PREFIX$i $PREFIX$(($i+1)) $PREFIX$(($i+2)) $PREFIX$(($i+3)) $PREFIX$(($i+4)) $PREFIX$(($i+5)) > /dev/null
         fi
