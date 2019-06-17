@@ -31,9 +31,9 @@ add_user() {
         echo "$USERNAME: Creating new user"
 
         let "NUMVM=$(wc workers -l | cut -d ' ' -f 1)"
-        for ((i=2;i<=NUMVM;i++))
+        for ((j=2;j<=NUMVM;j++))
         do
-            WORKER=`sed "${i}q;d" workers`
+            WORKER=`sed "${j}q;d" workers`
             WORKERID=`echo $WORKER | cut -d ' ' -f 2`
             WZONE=`echo $WORKER | cut -d ' ' -f 3`
             WZONE="--zone $WZONE"

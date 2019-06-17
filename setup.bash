@@ -337,6 +337,7 @@ do
             echo "-q,   --quiet         run the script with default options (unless specified otherwise):"
             echo "                          current project, 8 VMs, delete image"
             echo "-n  N                 set the number of nodes (N) in the cluster"
+            echo "      --prefix        specify the prefix to use when naming the VMs (must start with a letter)"
             echo "-d,   --delete-image  delete the MPI image after creating VMs (Default)"
             echo "-s,   --save-image    save the MPI image after creating VMs (this will incur costs)"
             exit -1
@@ -378,6 +379,16 @@ do
                 shift
             else
                 missing_argument "-p|--project"
+            fi
+            ;;
+        --prefix)
+            shift
+            if test $# -gt 0
+            then
+                PREFIX="$1-"
+                shift
+            else
+                missing_argument "--prefix"
             fi
             ;;
         *)
