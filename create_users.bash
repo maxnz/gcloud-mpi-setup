@@ -118,17 +118,16 @@ validate_key() {
 
 # Automated entry from a .csv file
 auto_entry() {
-    # Install csvtool if necessary
+    # Check if csvtool is installed
     apt list csvtool | grep "installed" &> /dev/null
     if [[ $? != 0 ]]
     then
         if [ "$EUID" -ne 0 ]
         then 
-            echo "sudo required"
-            echo "Try running the script again with sudo"
+            echo "Please install csvtool using:"
+            echo "  sudo apt install csvtool"
+            echo "to use automatic entry"
             exit 1
-        else
-            sudo apt install csvtool
         fi
     fi
 

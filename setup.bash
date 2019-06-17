@@ -250,8 +250,7 @@ create_workers_txt() {
         if [[ $i == 0 ]]
         then
             echo "$LOCALIP $PREFIX$i $INSTANCEZONE master" > workers
-            if [ -e mpihosts ]; then rm mpihosts; fi;
-            touch mpihosts
+            echo $PREFIX$i > mpihosts
         else
             echo "$LOCALIP $PREFIX$i $INSTANCEZONE" >> workers
             echo $PREFIX$i >> mpihosts
