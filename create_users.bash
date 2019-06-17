@@ -9,6 +9,7 @@ USERNAME=
 KEY=
 USERCOL=
 KEYCOL=
+PREFIX="mpi-"
 re_num='^[0-9]+$'
 
 
@@ -74,7 +75,7 @@ get_worker() {
     WORKER=`sed "$(($1 + 1))q;d" workers.temp | grep "RUNNING" | sed 's/  \+/ /g' | cut -d ' ' -f 4`
     WORKER="$WORKER $(sed "$(($1 + 1))q;d" workers.temp | grep "RUNNING" | sed 's/  \+/ /g' | cut -d ' ' -f 1,2)"
 
-    echo $WORKER | grep "mpi-0" &> /dev/null
+    echo $WORKER | grep "${PREFIX}0" &> /dev/null
     if [[ $? == 0 ]]
     then
         WORKER="$WORKER master"
@@ -162,8 +163,8 @@ auto_entry() {
     # Add all users
     for ((i=2;i<=NUMKEY;i++))
     do
-        USERNAME=`csvtool col $USERCOL $FILENAME | sed "${i}q;d"`
-        KEY=`csvtool col $KEYCOL $FILENAME | sed "${i}q;d"`
+        USERNAME=`csvtool col $USERCOL $FILENAME | sed "${i}q;d" | sed 's/"//g'`
+        KEY=`csvtool col $KEYCOL $FILENAME | sed "${i}q;d" | sed 's/"//g'`
 
         validate_username
         validate_key
@@ -216,6 +217,7 @@ do
             echo "Options:"
             echo "-h,   --help          show this help message"
             echo "-p,   --project ID    set the project to use (ID = full project id)"
+            echo "      --prefix        specify the prefix to use when finding the head node (\$prefix-0)"
             echo
             echo "-f FILE               specify the .csv file (FILE) to use"
             echo "-k N                  specify the column number (N) with the ssh keys"
@@ -270,6 +272,16 @@ do
                 shift
             else
                 missing_argument "-k"
+            fi
+            ;;
+        --prefix)
+            shift
+            if test $# -gt 0
+            then
+                PREFIX="$1-"
+                shift
+            else
+                missing_argument "--prefix"
             fi
             ;;
         *)
