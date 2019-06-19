@@ -25,8 +25,9 @@ set_project() {
         echo "Invalid project id $1"
         exit 1
     fi
-
+    echo -n "Setting project to $1..."
     gcloud config set project $1 &> /dev/null
+    echo "done"
     PROJECT=$1
 }
 export -f set_project

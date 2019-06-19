@@ -9,28 +9,34 @@ USERNAME=
 KEY=
 USERCOL=
 KEYCOL=
-PREFIX="mpi-"
+PREFIX="mpi"
 re_num='^[0-9]+$'
 
 
 add_user() {
-    RET=`gcloud compute ssh $MASTERID $MZONE --command \
-        "sudo useradd -m -s /bin/bash \"$USERNAME\";" 2>&1`
-
-    echo $RET | grep "already exists" &> /dev/null
-    RET=$?
-    RET2=1
-
-    if [[ $RET == 0 ]]
+    if grep $USERNAME users.temp &> /dev/null
     then
-        echo "$USERNAME: User exists - checking key"
-
-        gcloud compute ssh $MASTERID $MZONE --command "sudo cat /home/$USERNAME/.ssh/authorized_keys" | \
-        grep -Fx "$KEY" &> /dev/null
-        if [[ $? == 0 ]]; then RET2=0; fi;
+        echo -n "$USERNAME: User exists - checking key..."
+        if ! grep -Fx "$KEY" keys.temp/$USERNAME &> /dev/null
+        then
+            gcloud compute ssh $MASTERID $MZONE --command \
+            "echo | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;
+             echo \"# $USERNAME\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;
+             echo \"$KEY\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;"
+            echo > keys.temp/$USERNAME &> /dev/null;
+            echo "# $USERNAME" > keys.temp/$USERNAME &> /dev/null;
+            echo \"$KEY\" > keys.temp/$USERNAME &> /dev/null;
+            echo -n "added key...";
+        fi
+        echo "done"
     else
-        echo "$USERNAME: Creating new user"
-
+        echo -n "$USERNAME: Creating new user..."
+        gcloud compute ssh $MASTERID $MZONE --command \
+        "sudo useradd -m -s /bin/bash \"$USERNAME\";
+         echo | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;
+         echo \"# $USERNAME\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;
+         echo \"$KEY\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;"
+        echo $USERNAME >> users.temp
         let "NUMVM=$(wc workers -l | cut -d ' ' -f 1)"
         for ((j=2;j<=NUMVM;j++))
         do
@@ -41,16 +47,7 @@ add_user() {
             gcloud compute ssh $WORKERID $WZONE --command "sudo useradd -M -s /bin/bash $USERNAME;" &> /dev/null
             echo -n '.'
         done
-        echo
-    fi
-
-    if [[ $RET2 == 1 ]]
-    then
-        echo "Adding new SSH key"
-        gcloud compute ssh $MASTERID $MZONE --command \
-        "echo | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
-         echo \"# $USERNAME\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null; \
-         echo \"$KEY\" | sudo tee -a /home/$USERNAME/.ssh/authorized_keys &> /dev/null;"
+        echo "done"
     fi
 }
 
@@ -68,14 +65,16 @@ ask_project() {
     fi
 
     touch workers.temp
+    echo -n "Getting workers..."
     gcloud compute instances list > workers.temp
+    echo "done"
 }
 
 get_worker() {
     WORKER=`sed "$(($1 + 1))q;d" workers.temp | grep "RUNNING" | sed 's/  \+/ /g' | cut -d ' ' -f 4`
     WORKER="$WORKER $(sed "$(($1 + 1))q;d" workers.temp | grep "RUNNING" | sed 's/  \+/ /g' | cut -d ' ' -f 1,2)"
 
-    echo $WORKER | grep "${PREFIX}0" &> /dev/null
+    echo $WORKER | grep "${PREFIX}-0" &> /dev/null
     if [[ $? == 0 ]]
     then
         WORKER="$WORKER master"
@@ -86,14 +85,13 @@ get_worker() {
 }
 
 get_workers() {
-    NUMVM=`gcloud compute instances list | wc -l | cut -d ' ' -f 1`
+    NUMVM=`wc -l workers.temp | cut -d ' ' -f 1`
     let "NUMVM -= 1"
 
     for ((i=1;i<=NUMVM;i++))
     do
         get_worker $i
     done
-    rm workers.temp
 }
 
 # Validate username format
@@ -102,7 +100,7 @@ validate_username() {
     if [[ $? == 0 || $USERNAME == "" ]]
     then
         echo "$USERNAME: Skipping Username: Invalid Username"
-        continue
+        let "INVALID++"
     fi
 }
 
@@ -113,28 +111,13 @@ validate_key() {
     if [[ $KEY == "" || $keywc != 3 ]]
     then
         echo "$USERNAME: Skipping Username: Invalid SSH key"
-        continue
+        let "INVALID++"
     fi
 }
 
-# Automated entry from a .csv file
+# Automated entry from a .csv file  
 auto_entry() {
-    # Check if csvtool is installed
-    apt list csvtool | grep "installed" &> /dev/null
-    if [[ $? != 0 ]]
-    then
-        if [ "$EUID" -ne 0 ]
-        then 
-            echo "Please install csvtool using:"
-            echo "  sudo apt install csvtool"
-            echo "to use automatic entry"
-            exit 1
-        fi
-    fi
-
-    ask_project
-    get_workers
-    config_master_vars
+    sed -i 's/"//g' $FILENAME
 
     # Get username column if necessary
     if [[ -z $USERCOL ]]
@@ -166,8 +149,10 @@ auto_entry() {
         USERNAME=`csvtool col $USERCOL $FILENAME | sed "${i}q;d" | sed 's/"//g'`
         KEY=`csvtool col $KEYCOL $FILENAME | sed "${i}q;d" | sed 's/"//g'`
 
+        INVALID=0
         validate_username
         validate_key
+        if [ $INVALID -gt 0 ]; then continue; fi;
         add_user
     done
 
@@ -176,10 +161,6 @@ auto_entry() {
 
 
 manual_entry() {
-    ask_project
-    get_workers
-    config_master_vars
-
     while true 
     do
         echo
@@ -199,8 +180,10 @@ manual_entry() {
             break
         fi
 
+        INVALID=0
         validate_username
         validate_key
+        if [ $INVALID -gt 0 ]; then continue; fi;
         add_user
     done
 }
@@ -293,6 +276,35 @@ done
 
 if [[ $AUTO == 1 ]]
 then
+    # Check if csvtool is installed
+    if ! apt list csvtool | grep "installed" &> /dev/null
+    then
+        if [ "$EUID" -ne 0 ]
+        then 
+            echo "Please install csvtool using:"
+            echo "  sudo apt install csvtool"
+            echo "to use automatic entry"
+            exit 1
+        fi
+    fi
+fi
+
+ask_project
+get_workers
+config_master_vars
+
+touch users.temp
+echo -n "Finding users..."
+gcloud compute ssh $MASTERID $MZONE --command "getent passwd | grep '/home' | cut -d ':' -f 1" > users.temp
+USERS=`cat users.temp | tr '\n' ' '`
+echo -n "keys..."
+gcloud compute ssh $MASTERID $MZONE --command "mkdir keys.temp; for user in $USERS; do sudo cat /home/\$user/.ssh/authorized_keys > keys.temp/\$user; done;" &> /dev/null
+gcloud compute scp $MZONE --recurse $MASTERID:keys.temp . &> /dev/null
+echo "done"
+
+
+if [[ $AUTO == 1 ]]
+then
     echo "Automatic Entry"
     auto_entry
 else
@@ -301,9 +313,14 @@ else
 fi
 
 echo -n "Master Node IP..."
-gcloud compute instances list | sed 's/  \+/ /g' | grep $MASTERID | cut -d ' ' -f 5
+if [ -e workers.temp ]; then cat workers.temp | sed 's/  \+/ /g' | grep $MASTERID | cut -d ' ' -f 5;
+else gcloud compute instances list | sed 's/  \+/ /g' | grep $MASTERID | cut -d ' ' -f 5; fi;
 
 if [[ $PROJECT != $OLD_PROJECT ]]
 then
     set_project $OLD_PROJECT
 fi
+
+if [ -e users.temp ]; then rm users.temp; fi;
+if [ -e workers.temp ]; then rm workers.temp; fi;
+if [ -e keys.temp ]; then rm -r keys.temp; fi;
